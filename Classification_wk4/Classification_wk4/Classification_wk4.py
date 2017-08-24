@@ -51,7 +51,8 @@ print "Number of features (after binarizing categorical variables) = %s" % len(f
 loans_data['grade.A']
 print "Total number of grade.A loans : %s" % loans_data['grade.A'].sum()
 print "Expexted answer               : 6422"
-train_data, test_data = loans_data.random_split(.8, seed=1)
+#train_data, test_data = loans_data.random_split(.8, seed=1)
+train_data, validation_set = loans_data.random_split(.8, seed=1)
 
 def reached_minimum_node_size(data, min_node_size):
     # Return True if the number of data points is less than or equal to the minimum node size.
@@ -64,7 +65,7 @@ def reached_minimum_node_size(data, min_node_size):
 def error_reduction(error_before_split, error_after_split):
     # Return the error before the split minus the error after the split.
     ## YOUR CODE HERE
-    retrun (error_before_split - error_after_split)
+    return (error_before_split - error_after_split)
 
 def intermediate_node_num_mistakes(labels_in_node):
     # Corner case: If labels_in_node is empty, return 0
@@ -149,7 +150,6 @@ def create_leaf(target_values):
     # Return the leaf node        
     return leaf
 
-
 def decision_tree_create(data, features, target, current_depth = 0, 
                          max_depth = 10, min_node_size=1, 
                          min_error_reduction=0.0):
@@ -196,14 +196,22 @@ def decision_tree_create(data, features, target, current_depth = 0,
     
     # Calculate the error after splitting (number of misclassified examples 
     # in both groups divided by the total number of examples)
-    left_mistakes =  min(len(left_split[left_split==-1]),len(left_split[left_split==1]))  ## YOUR CODE HERE
-    right_mistakes = min(len(right_split[right_split==-1]),len(right_split[right_split==1]))  ## YOUR CODE HERE
+    left_minus_count =  left_split[left_split[target]==-1]
+    left_plus_count = left_split[left_split[target]==1]
+    left_minus_count = len(left_minus_count)
+    left_plus_count = len(left_plus_count)
+    left_mistakes =  min(left_minus_count,left_plus_count)  ## YOUR CODE HERE
+    right_minus_count =  right_split[right_split[target]==-1]
+    right_plus_count = right_split[right_split[target]==1]
+    right_minus_count = len(right_minus_count)
+    right_plus_count = len(right_plus_count)
+    right_mistakes = min(right_minus_count,right_plus_count)  ## YOUR CODE HERE
     error_after_split = (left_mistakes + right_mistakes) / float(len(data))
     
     # If the error reduction is LESS THAN OR EQUAL TO min_error_reduction, return a leaf.
-    if  error_reduction(error_before_split,error_after_split) < min_error_reduction       ## YOUR CODE HERE
+    if  error_reduction(error_before_split,error_after_split) < min_error_reduction:       ## YOUR CODE HERE
         print "Early stopping condition 3 reached. Minimum error reduction."
-        return   ## YOUR CODE HERE 
+        return   create_leaf(target_values)## YOUR CODE HERE 
     
     
     remaining_features.remove(splitting_feature)
@@ -216,7 +224,8 @@ def decision_tree_create(data, features, target, current_depth = 0,
                                      current_depth + 1, max_depth, min_node_size, min_error_reduction)        
     
     ## YOUR CODE HERE
-    right_tree = 
+    right_tree = decision_tree_create(right_split, remaining_features, target, 
+                                     current_depth + 1, max_depth, min_node_size, min_error_reduction)
     
     
     return {'is_leaf'          : False, 
@@ -225,5 +234,118 @@ def decision_tree_create(data, features, target, current_depth = 0,
             'left'             : left_tree, 
             'right'            : right_tree}
 
+def count_nodes(tree):
+    if tree['is_leaf']:
+        return 1
+    return 1 + count_nodes(tree['left']) + count_nodes(tree['right'])
 
+small_decision_tree = decision_tree_create(train_data, features, 'safe_loans', max_depth = 2, 
+                                        min_node_size = 10, min_error_reduction=0.0)
+if count_nodes(small_decision_tree) == 7:
+    print 'Test passed!'
+else:
+    print 'Test failed... try again!'
+    print 'Number of nodes found                :', count_nodes(small_decision_tree)
+    print 'Number of nodes that should be there : 7' 
 
+my_decision_tree_new = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 100, min_error_reduction=0.0)
+
+my_decision_tree_old = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=-1)
+
+def classify(tree, x, annotate = False):   
+    # if the node is a leaf node.
+    if tree['is_leaf']:
+        if annotate: 
+            print "At leaf, predicting %s" % tree['prediction']
+        return tree['prediction'] 
+    else:
+        # split on feature.
+        split_feature_value = x[tree['splitting_feature']]
+        if annotate: 
+            print "Split on %s = %s" % (tree['splitting_feature'], split_feature_value)
+        if split_feature_value == 0:
+            return classify(tree['left'], x, annotate)
+        else:
+            ### YOUR CODE HERE
+            return classify(tree['right'],x,annotate)
+
+validation_set[0]
+print 'Predicted class: %s ' % classify(my_decision_tree_new, validation_set[0])
+classify(my_decision_tree_new, validation_set[0], annotate = True)
+classify(my_decision_tree_old, validation_set[0], annotate = True)
+
+def evaluate_classification_error(tree, data, target):
+    # Apply the classify(tree, x) to each row in your data
+    prediction = data.apply(lambda x: classify(tree, x))
+    
+    # Once you've made the predictions, calculate the classification error and return it
+    ## YOUR CODE HERE
+    diff = prediction-data[target]
+    mistake = diff[diff!=0]
+    return float(len(mistake))/float(len(diff))
+
+evaluate_classification_error(my_decision_tree_new, validation_set, target)
+
+evaluate_classification_error(my_decision_tree_old, validation_set, target)
+
+model_1 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 2, 
+                                min_node_size = 0, min_error_reduction=-1)
+model_2 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=-1)
+model_3 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 14, 
+                                min_node_size = 0, min_error_reduction=-1)
+
+print "Training data, classification error (model 1):", evaluate_classification_error(model_1, train_data, target)
+print "Training data, classification error (model 2):", evaluate_classification_error(model_2, train_data, target)
+print "Training data, classification error (model 3):", evaluate_classification_error(model_3, train_data, target)
+
+print "Validation data, classification error (model 1):", evaluate_classification_error(model_1, validation_set, target)
+print "Validation data, classification error (model 2):", evaluate_classification_error(model_2, validation_set, target)
+print "Validation data, classification error (model 3):", evaluate_classification_error(model_3, validation_set, target)
+
+def count_leaves(tree):
+    if tree['is_leaf']:
+        return 1
+    return count_leaves(tree['left']) + count_leaves(tree['right'])
+
+model_1_cnt = count_leaves(model_1)
+model_2_cnt = count_leaves(model_2)
+model_3_cnt = count_leaves(model_3)
+
+model_4 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=-1)
+model_5 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=0)
+model_6 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=5)
+
+print "Validation data, classification error (model 4):", evaluate_classification_error(model_4, validation_set, target)
+print "Validation data, classification error (model 5):", evaluate_classification_error(model_5, validation_set, target)
+print "Validation data, classification error (model 6):", evaluate_classification_error(model_6, validation_set, target)
+
+model_4_cnt = count_leaves(model_4)
+model_5_cnt = count_leaves(model_5)
+model_6_cnt = count_leaves(model_6)
+model_4_cnt
+model_5_cnt
+model_6_cnt
+
+model_7 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 0, min_error_reduction=-1)
+model_8 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 2000, min_error_reduction=-1)
+model_9 = decision_tree_create(train_data, features, 'safe_loans', max_depth = 6, 
+                                min_node_size = 50000, min_error_reduction=-1)
+
+print "Validation data, classification error (model 7):", evaluate_classification_error(model_7, validation_set, target)
+print "Validation data, classification error (model 8):", evaluate_classification_error(model_8, validation_set, target)
+print "Validation data, classification error (model 9):", evaluate_classification_error(model_9, validation_set, target)
+
+model_7_cnt = count_leaves(model_7)
+model_8_cnt = count_leaves(model_8)
+model_9_cnt = count_leaves(model_9)
+model_7_cnt
+model_8_cnt
+model_9_cnt
